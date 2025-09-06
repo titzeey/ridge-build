@@ -16,6 +16,7 @@
 (define-constant ERR-TEMPLATE-NOT-FOUND (err u111))
 (define-constant ERR-BRIDGE-DISABLED (err u112))
 (define-constant ERR-QUEUE-FULL (err u113))
+(define-constant ERR-NOTIFICATION-NOT-FOUND (err u114))
 
 ;; Contract constants
 (define-constant CONTRACT-OWNER tx-sender)
@@ -148,6 +149,49 @@
 
 (define-private (validate-priority (priority uint))
     (and (>= priority u1) (<= priority u10))
+)
+
+;; Math helper functions
+(define-private (min (a uint) (b uint))
+    (if (< a b) a b)
+)
+
+(define-private (max (a uint) (b uint))
+    (if (> a b) a b)
+)
+
+;; Helper function to check if a principal is in the delivery nodes list
+(define-private (is-delivery-node (node principal) (node-list (list 3 principal)))
+    (is-some (index-of node-list node))
+)
+
+;; Helper function to select delivery nodes (simplified)
+(define-private (select-delivery-nodes (priority uint))
+    (list tx-sender tx-sender tx-sender) ;; Simplified - in production would select based on reputation/stake
+)
+
+;; Helper function to get current gas price (simplified)
+(define-private (get-current-gas-price)
+    u1000 ;; Simplified - in production would be dynamic
+)
+
+;; Helper function to update node performance
+(define-private (update-node-performance (node principal) (success bool))
+    (match (map-get? node-performance node)
+        performance
+        (let ((new-successes (if success (+ (get consecutive-successes performance) u1) u0))
+              (new-rate (if success 
+                          (min u100 (+ (get success-rate performance) u1))
+                          (max u0 (- (get success-rate performance) u5)))))
+            (map-set node-performance node
+                (merge performance {
+                    success-rate: new-rate,
+                    consecutive-successes: new-successes
+                }))
+            true
+        )
+        false
+    )
 )
 
 ;; Admin functions
@@ -325,4 +369,30 @@
         )
         ERR-NOTIFICATION-NOT-FOUND
     )
+)
+
+;; Read-only functions for querying contract state
+(define-read-only (get-notification-node (node principal))
+    (map-get? notification-nodes node)
+)
+
+(define-read-only (get-user-subscription (user principal))
+    (map-get? user-subscriptions user)
+)
+
+(define-read-only (get-notification (notification-id uint))
+    (map-get? notification-queue notification-id)
+)
+
+(define-read-only (get-node-performance (node principal))
+    (map-get? node-performance node)
+)
+
+(define-read-only (get-protocol-stats)
+    {
+        total-nodes: (var-get total-nodes),
+        total-notifications: (var-get total-notifications),
+        protocol-fee-rate: (var-get protocol-fee-rate),
+        emergency-pause: (var-get emergency-pause)
+    }
 )
